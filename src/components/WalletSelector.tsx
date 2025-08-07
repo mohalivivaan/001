@@ -1,6 +1,6 @@
 import React from 'react';
 import { WalletInfo } from '../types/wallet';
-import { Wallet, Download, ExternalLink } from 'lucide-react';
+import { Wallet } from 'lucide-react';
 
 interface WalletSelectorProps {
   wallets: WalletInfo[];
@@ -13,141 +13,144 @@ export const WalletSelector: React.FC<WalletSelectorProps> = ({
   onConnect,
   isConnecting,
 }) => {
-  // Define all supported wallets with their installation/redirect URLs
-  const supportedWallets = [
-    { 
-      name: 'MetaMask', 
-      icon: '🦊',
-      installUrl: 'https://metamask.io/download/',
-      mobileDeepLink: 'https://metamask.app.link/dapp/',
-    },
-    { 
-      name: 'Trust Wallet', 
-      icon: '🔷',
-      installUrl: 'https://trustwallet.com/',
-      mobileDeepLink: 'https://link.trustwallet.com/open_url?coin_id=60&url=',
-    },
-    { 
-      name: 'SafePal', 
-      icon: '🛡️',
-      installUrl: 'https://safepal.io/',
-      mobileDeepLink: null,
-    },
-  ];
+  // Enhanced wallet detection - check for actual providers in window object
+  const detectWallets = () => {
+    const detectedWallets = [];
 
-  // Check if a wallet is detected/available
-  const isWalletDetected = (walletName: string) => {
-    return wallets.some(wallet => wallet.name.toLowerCase().includes(walletName.toLowerCase()));
-  };
+    // Check MetaMask
+    if (typeof window !== 'undefined' && window.ethereum?.isMetaMask) {
+      detectedWallets.push({
+        name: 'MetaMask',
+        icon: '🦊',
+        provider: window.ethereum,
+        id: 'metamask'
+      });
+    }
 
-  // Get detected wallet provider
-  const getWalletProvider = (walletName: string) => {
-    const detectedWallet = wallets.find(wallet => 
-      wallet.name.toLowerCase().includes(walletName.toLowerCase())
-    );
-    return detectedWallet?.provider;
-  };
+    // Check Trust Wallet
+    if (typeof window !== 'undefined' && window.ethereum?.isTrust) {
+      detectedWallets.push({
+        name: 'Trust Wallet',
+        icon: '🔷',
+        provider: window.ethereum,
+        id: 'trustwallet'
+      });
+    }
 
-  // Handle wallet action (connect or redirect)
-  const handleWalletAction = (wallet: any) => {
-    const isDetected = isWalletDetected(wallet.name);
-    
-    if (isDetected) {
-      // Wallet is detected, connect to it
-      const provider = getWalletProvider(wallet.name);
-      if (provider) {
-        onConnect(provider);
-      }
-    } else {
-      // Wallet not detected, redirect to install or mobile app
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    // Check Xverse (Bitcoin wallet)
+    if (typeof window !== 'undefined' && window.XverseProviders?.BitcoinProvider) {
+      detectedWallets.push({
+        name: 'Xverse',
+        icon: '⚡',
+        provider: window.XverseProviders.BitcoinProvider,
+        id: 'xverse'
+      });
+    }
+
+    // Check SafePal
+    if (typeof window !== 'undefined' && window.safepalProvider) {
+      detectedWallets.push({
+        name: 'SafePal',
+        icon: '🛡️',
+        provider: window.safepalProvider,
+        id: 'safepal'
+      });
+    }
+
+    // Check Phantom (Solana wallet)
+    if (typeof window !== 'undefined' && window.phantom?.solana) {
+      detectedWallets.push({
+        name: 'Phantom',
+        icon: '👻',
+        provider: window.phantom.solana,
+        id: 'phantom'
+      });
+    }
+
+    // Check Coinbase Wallet
+    if (typeof window !== 'undefined' && window.ethereum?.isCoinbaseWallet) {
+      detectedWallets.push({
+        name: 'Coinbase Wallet',
+        icon: '🔵',
+        provider: window.ethereum,
+        id: 'coinbase'
+      });
+    }
+
+    // Fallback: use the provided wallets array if our detection missed something
+    wallets.forEach(wallet => {
+      const exists = detectedWallets.some(detected => 
+        detected.name.toLowerCase().includes(wallet.name.toLowerCase()) ||
+        wallet.name.toLowerCase().includes(detected.name.toLowerCase())
+      );
       
-      if (isMobile && wallet.mobileDeepLink) {
-        // Try to open mobile wallet app
-        const currentUrl = window.location.href;
-        const deepLinkUrl = wallet.mobileDeepLink + encodeURIComponent(currentUrl);
-        window.open(deepLinkUrl, '_blank');
-      } else {
-        // Redirect to install page
-        window.open(wallet.installUrl, '_blank');
+      if (!exists && wallet.provider) {
+        detectedWallets.push({
+          name: wallet.name,
+          icon: wallet.icon || '🔗',
+          provider: wallet.provider,
+          id: wallet.name.toLowerCase().replace(/\s+/g, '')
+        });
       }
+    });
+
+    return detectedWallets;
+  };
+
+  const detectedWallets = detectWallets();
+
+  const handleConnect = (provider: any, walletName: string) => {
+    try {
+      onConnect(provider);
+    } catch (error) {
+      console.error(`Failed to connect to ${walletName}:`, error);
     }
   };
 
-  // Get button text and style based on wallet status
-  const getButtonProps = (walletName: string) => {
-    const isDetected = isWalletDetected(walletName);
-    
-    if (isDetected) {
-      return {
-        text: isConnecting ? 'Connecting...' : 'Connect',
-        className: 'px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:opacity-50 text-white rounded-lg font-medium transition-all duration-200 hover:scale-105',
-        disabled: isConnecting,
-        icon: null
-      };
-    } else {
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      return {
-        text: isMobile ? 'Open App' : 'Install',
-        className: 'px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-all duration-200 hover:scale-105 flex items-center space-x-2',
-        disabled: false,
-        icon: isMobile ? <ExternalLink className="w-4 h-4" /> : <Download className="w-4 h-4" />
-      };
-    }
-  };
+  if (detectedWallets.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <Wallet className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-white mb-2">No Wallets Found</h3>
+        <p className="text-gray-400 text-sm">
+          Please install a wallet extension like MetaMask, Trust Wallet, or Xverse to continue.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold text-white mb-4 flex items-center">
           <Wallet className="w-5 h-5 mr-2" />
-          Connect Wallet
+          Available Wallets ({detectedWallets.length})
         </h3>
         
         <div className="space-y-3">
-          {supportedWallets.map((wallet) => {
-            const buttonProps = getButtonProps(wallet.name);
-            const isDetected = isWalletDetected(wallet.name);
-            
-            return (
-              <div
-                key={wallet.name}
-                className={`flex items-center justify-between p-4 backdrop-blur-sm rounded-lg border transition-all duration-200 ${
-                  isDetected 
-                    ? 'bg-green-500/10 border-green-500/30' 
-                    : 'bg-white/10 border-white/20'
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  <span className="text-2xl">{wallet.icon}</span>
-                  <div className="flex flex-col">
-                    <span className="text-white font-medium">{wallet.name}</span>
-                    <span className={`text-sm ${
-                      isDetected ? 'text-green-400' : 'text-gray-400'
-                    }`}>
-                      {isDetected ? 'Detected' : 'Not installed'}
-                    </span>
-                  </div>
+          {detectedWallets.map((wallet) => (
+            <div
+              key={wallet.id}
+              className="flex items-center justify-between p-4 bg-green-500/10 backdrop-blur-sm rounded-lg border border-green-500/30 transition-all duration-200 hover:bg-green-500/15"
+            >
+              <div className="flex items-center space-x-3">
+                <span className="text-2xl">{wallet.icon}</span>
+                <div className="flex flex-col">
+                  <span className="text-white font-medium">{wallet.name}</span>
+                  <span className="text-sm text-green-400">Ready to connect</span>
                 </div>
-                
-                <button
-                  onClick={() => handleWalletAction(wallet)}
-                  disabled={buttonProps.disabled}
-                  className={buttonProps.className}
-                >
-                  {buttonProps.icon && <span>{buttonProps.icon}</span>}
-                  <span>{buttonProps.text}</span>
-                </button>
               </div>
-            );
-          })}
+              
+              <button
+                onClick={() => handleConnect(wallet.provider, wallet.name)}
+                disabled={isConnecting}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:opacity-50 text-white rounded-lg font-medium transition-all duration-200 hover:scale-105"
+              >
+                {isConnecting ? 'Connecting...' : 'Connect'}
+              </button>
+            </div>
+          ))}
         </div>
-        
-        {wallets.length === 0 && (
-          <p className="text-gray-400 text-sm mt-4 text-center">
-            No wallets detected. Install a wallet extension to get started.
-          </p>
-        )}
       </div>
     </div>
   );
